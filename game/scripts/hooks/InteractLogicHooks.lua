@@ -13,26 +13,8 @@ local SimpleHook = ModRequire "../utils/SimpleHook.lua"
 local Events = ModRequire "../logic/Events.lua"
 ---@type LootRegistry
 local LootRegistry = ModRequire "../logic/loot/LootRegistry.lua"
----@type RoomExitSelection
-local RoomExitSelection = ModRequire "../logic/RoomExitSelection.lua"
 
 local InteractLogicHooks = SimpleHook.New()
-
-local function handleRoomExit(triggerArgs, hero, useDoor)
-    local playerId = CoopPlayers.GetPlayerByHero(hero)
-    local item = triggerArgs.TriggeredByTable
-    if not playerId then
-        return false
-    end
-
-    local handled = RoomExitSelection.RecordDoorInteraction(
-        playerId,
-        item,
-        triggerArgs,
-        useDoor
-    )
-    return handled
-end
 
 ---@param item table
 ---@param fallbackHero table
@@ -64,10 +46,8 @@ function InteractLogicHooks.wrap.OnUsed(_OnUsed, args)
             local hero = resolveHero(item, interactingHero)
 
             local functionName = triggerArgs.AttachedTable and triggerArgs.AttachedTable.OnUsedFunctionName
-            if functionName == "UseEscapeDoor" then
-                if handleRoomExit(triggerArgs, hero, args[1]) then
-                    return
-                end
+            if functionName == "UseEscapeDoor" and hero ~= HeroContext.GetDefaultHero() then
+                return
             end
 
             HeroContext.RunWithHeroContext(
@@ -102,6 +82,9 @@ function InteractLogicHooks.wrap.OnActiveUseTarget(baseFun, args)
                 local interactingHero = CoopPlayers.GetHeroByUnit(triggerArgs.UserId)
                 local hero = resolveHero(item, interactingHero)
                 local functionName = triggerArgs.AttachedTable and triggerArgs.AttachedTable.OnUsedFunctionName
+                if functionName == "UseEscapeDoor" and hero ~= HeroContext.GetDefaultHero() then
+                    return
+                end
                 HeroContext.RunWithHeroContext(
                     hero,
                     args[1],
@@ -122,6 +105,9 @@ function InteractLogicHooks.wrap.OnActiveUseTargetLost(baseFun, args)
                 local interactingHero = CoopPlayers.GetHeroByUnit(triggerArgs.UserId)
                 local hero = resolveHero(item, interactingHero)
                 local functionName = triggerArgs.AttachedTable and triggerArgs.AttachedTable.OnUsedFunctionName
+                if functionName == "UseEscapeDoor" and hero ~= HeroContext.GetDefaultHero() then
+                    return
+                end
                 HeroContext.RunWithHeroContext(
                     hero,
                     args[1],

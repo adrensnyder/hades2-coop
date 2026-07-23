@@ -133,6 +133,13 @@ function RunHooks.wrap.CheckRoomExitsReady(baseFun, ...)
     end
 end
 
+function RunHooks.wrap.AttemptUseDoor(baseFun, door, args)
+    if RoomExitSelection.HandleAttemptUseDoor(baseFun, door, args) then
+        return
+    end
+    return baseFun(door, args)
+end
+
 function RunHooks.wrap.EndEarlyAccessPresentation(baseFun)
     local mainHero = CoopPlayers.GetMainHero()
     mainHero.IsDead = false
@@ -171,7 +178,11 @@ function RunHooks.wrap.KillHero(baseFun, ...)
 end
 
 function RunHooks.pre.LeaveRoom(currentRun, door)
-    RoomExitSelection.Cancel()
+    if RoomExitSelection.IsTransitionAuthorized() then
+        RoomExitSelection.Complete()
+    else
+        RoomExitSelection.Cancel()
+    end
     Events.run:trigger("roomPreLeave", currentRun, door)
 end
 
