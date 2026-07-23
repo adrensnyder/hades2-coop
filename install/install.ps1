@@ -1,25 +1,57 @@
-$ErrorActionPreference = "Inquire"
+param(
+    [string]$Exe
+)
 
-Add-Type -AssemblyName System.Windows.Forms
+$ErrorActionPreference = "Stop"
 
-$FileBrowser = New-Object System.Windows.Forms.OpenFileDialog -Property @{
+$PackageDir = $PSScriptRoot
+
+function Resolve-GameExe {
+    param([string]$Path)
+
+    if (-not $Path) {
+        return $null
+    }
+
+    $resolved = (Resolve-Path -LiteralPath $Path -ErrorAction Stop).Path
+    if ((Get-Item -LiteralPath $resolved).PSIsContainer) {
+        $resolved = Join-Path $resolved "Hades2.exe"
+    }
+
+    if (-not (Test-Path -LiteralPath $resolved -PathType Leaf) -or
+        [IO.Path]::GetFileName($resolved) -ne "Hades2.exe") {
+        throw "The -Exe path must point to Hades2.exe or its Ship directory: $Path"
+    }
+
+    return $resolved
+}
+
+if ($Exe) {
+    $ExePath = Resolve-GameExe $Exe
+} else {
+    Add-Type -AssemblyName System.Windows.Forms
+
+    $FileBrowser = New-Object System.Windows.Forms.OpenFileDialog -Property @{
     InitialDirectory = [Environment]::GetFolderPath('MyComputer')
     Filter = "Executable Files (*.exe)|Hades2.exe"
     Title = "Select your Hades2.exe"
 }
 
-if ($FileBrowser.ShowDialog() -ne [System.Windows.Forms.DialogResult]::OK) {
+    if ($FileBrowser.ShowDialog() -ne [System.Windows.Forms.DialogResult]::OK) {
     Write-Host "Operation cancelled by user." -ForegroundColor Yellow
     exit
+    }
+
+    $ExePath = $FileBrowser.FileName
 }
 
-$ExePath = $FileBrowser.FileName
 $GameExeDir = Split-Path -Path $ExePath -Parent
 $GameDir = Split-Path -Path $GameExeDir -Parent
 $ModsDir = Join-Path $GameDir "Content/Mods"
 $PluginsDir = Join-Path -Path $GameExeDir -ChildPath "plugins"
 
 Write-Host "Target Directory: $GameExeDir" -ForegroundColor Cyan
+Write-Host "Package Directory: $PackageDir" -ForegroundColor Cyan
 
 function installPlugin() {
     Write-Host "Installing HadesModNativeExtension.asi" -ForegroundColor Cyan
@@ -29,21 +61,26 @@ function installPlugin() {
         Write-Host "Created plugins folder."
     }
 
-    if (Test-Path -Path "HadesModNativeExtension.asi") {
-        Copy-Item -Path "HadesModNativeExtension.asi" -Destination $PluginsDir -Force
+    $nativeExtension = Join-Path $PackageDir "HadesModNativeExtension.asi"
+    if (Test-Path -LiteralPath $nativeExtension -PathType Leaf) {
+        Copy-Item -LiteralPath $nativeExtension -Destination $PluginsDir -Force
         Write-Host "Copied HadesModNativeExtension.asi to $PluginsDir" -ForegroundColor Green
     } else {
-        Write-Error "Source 'HadesModNativeExtension.asi' not found in the current script directory!"
-        exit
+        throw "Source 'HadesModNativeExtension.asi' not found beside install.ps1."
     }
 }
 
 function installASILoader() {
     Write-Host "Downloading ASI Loader..." -ForegroundColor Cyan
 
-    if (-not (Test-Path -Path (Join-Path $PluginsDir "/bink2w64Hooked.dll"))) {
+    $originalDll = Join-Path $GameExeDir "bink2w64Hooked.dll"
+    $loaderDll = Join-Path $GameExeDir "bink2w64.dll"
+    if (-not (Test-Path -LiteralPath $originalDll -PathType Leaf)) {
         Write-Host "Rename bink2w64.dll to bink2w64Hooked.dll."
-        Move-Item -Path  (Join-Path $GameExeDir "bink2w64.dll") -Destination (Join-Path $GameExeDir "bink2w64Hooked.dll") -Force
+        if (-not (Test-Path -LiteralPath $loaderDll -PathType Leaf)) {
+            throw "Original bink2w64.dll not found in $GameExeDir."
+        }
+        Move-Item -LiteralPath $loaderDll -Destination $originalDll -Force
     } else {
         Write-Host "Skip bink2w64Hooked.dll."
     }
@@ -52,7 +89,7 @@ function installASILoader() {
     $ZipPath = Join-Path -Path $env:TEMP -ChildPath "asi_loader.zip"
     $TempExtractPath = Join-Path -Path $env:TEMP -ChildPath "asi_loader_temp"
     
-    Invoke-WebRequest -Uri $Url -OutFile $ZipPath
+    Invoke-WebRequest -Uri $Url -OutFile $ZipPath -UseBasicParsing
 
     # Unpack and move bink2w64.dll
     if (Test-Path $TempExtractPath) { Remove-Item $TempExtractPath -Recurse -Force }
@@ -61,7 +98,7 @@ function installASILoader() {
     $DllSource = Get-ChildItem -Path $TempExtractPath -Filter "bink2w64.dll" -Recurse | Select-Object -First 1
 
     if ($DllSource) {
-        Move-Item -Path $DllSource.FullName -Destination (Join-Path $GameExeDir "bink2w64.dll") -Force
+        Move-Item -LiteralPath $DllSource.FullName -Destination $loaderDll -Force
         Write-Host "Successfully installed bink2w64.dll to game folder." -ForegroundColor Green
     } else {
         Write-Error "Could not find bink2w64.dll inside the downloaded zip."
@@ -79,10 +116,15 @@ function installMod() {
 
     Write-Host "Copy $ModName mod files..." -ForegroundColor Cyan
     
-    if (Test-Path -Path $ModsDir/$ModName) {
-        Remove-Item $ModsDir/$ModName -Force -Recurse
+    $source = Join-Path $PackageDir $ModName
+    $destination = Join-Path $ModsDir $ModName
+    if (-not (Test-Path -LiteralPath $source -PathType Container)) {
+        throw "Package directory not found: $source"
     }
-    Copy-Item -Path $ModName -Destination $ModsDir -Force -Recurse
+    if (Test-Path -LiteralPath $destination) {
+        Remove-Item -LiteralPath $destination -Force -Recurse
+    }
+    Copy-Item -LiteralPath $source -Destination $ModsDir -Force -Recurse
 }
 
 function install {
@@ -105,4 +147,8 @@ function install {
 
 
 install
-Read-Host -Prompt "`nSetup complete!. Press Enter to exit."
+if (-not $Exe) {
+    Read-Host -Prompt "`nSetup complete. Press Enter to exit."
+} else {
+    Write-Host "`nSetup complete." -ForegroundColor Green
+}
