@@ -74,7 +74,20 @@ function LootShared.SpawnRoomReward(baseFun, eventSource, args)
         if otherIndex and CoopPlayers.GetPlayersCount() >= 2 then
             local otherHero = CoopPlayers.GetHero(otherIndex)
             if otherHero and not otherHero.IsDead then
-                local offsetArgs = MergeTables(args, { OffsetX = (args.OffsetX or 0) + 100 })
+                local offset = { X = 100, Y = 0 }
+                if result and result.ObjectId and otherHero.ObjectId then
+                    local angle = GetAngleBetween({
+                        Id = result.ObjectId,
+                        DestinationId = otherHero.ObjectId,
+                    })
+                    offset = CalcOffset(math.rad(angle + 180), 110)
+                end
+
+                local offsetArgs = MergeTables(args or {}, {
+                    SpawnRewardOnId = result and result.ObjectId,
+                    OffsetX = offset.X,
+                    OffsetY = offset.Y,
+                })
                 local result2 = HeroContext.RunWithHeroContextAwait(otherHero, baseFun, eventSource, offsetArgs)
                 if result2 and result2.ObjectId then
                     LootRegistry.Register(result2.ObjectId, otherIndex, "room_reward", result2.Name)
