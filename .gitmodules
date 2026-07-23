@@ -1,3 +1,4 @@
 [submodule "libs/hades2-engine-interface"]
 	path = libs/hades2-engine-interface
 	url = git@github.com:adrensnyder/hades2-engine-interface.git
+    branch = dev
