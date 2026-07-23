@@ -12,6 +12,13 @@ local Config = {
     -- The game has a query that select a player context for a reward.
     -- E.g. Player 1 boon room, meta progress room, Player 2 boon room, Player 1 boon room...
     LootDelivery = "Shared",
+
+    -- Choose reward mode here
+    -- Possible values: "Shared", "Independent"
+    --
+    -- Shared   - one reward per room, alternating ownership between players.
+    -- Independent - one reward per player per room (each player gets their own).
+    RewardMode = "Independent",
     Player1HasOutline = true;
     Player1Outline = {
         R = 0,

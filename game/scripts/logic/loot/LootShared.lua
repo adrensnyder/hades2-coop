@@ -15,6 +15,8 @@ local Events = ModRequire "../Events.lua"
 local LootQuery = ModRequire "LootQuery.lua"
 ---@type LootRegistry
 local LootRegistry = ModRequire "LootRegistry.lua"
+---@type CoopModConfig
+local Config = ModRequire "../../config.lua"
 
 ---@class LootShared : ILootDelivery
 local LootShared = {}
@@ -63,6 +65,20 @@ function LootShared.SpawnRoomReward(baseFun, eventSource, args)
     if result and result.ObjectId then
         local ownerIndex = playerIndex or CoopPlayers.GetPlayerByHero(hero) or 1
         LootRegistry.Register(result.ObjectId, ownerIndex, "room_reward", result.Name)
+    end
+
+    if Config.RewardMode == "Independent" then
+        local otherIndex = LootQuery.GetOtherPlayerIndex()
+        if otherIndex and CoopPlayers.GetPlayersCount() >= 2 then
+            local otherHero = CoopPlayers.GetHero(otherIndex)
+            if otherHero and not otherHero.IsDead then
+                local offsetArgs = MergeTables(args, { OffsetX = (args.OffsetX or 0) + 100 })
+                local result2 = HeroContext.RunWithHeroContextAwait(otherHero, baseFun, eventSource, offsetArgs)
+                if result2 and result2.ObjectId then
+                    LootRegistry.Register(result2.ObjectId, otherIndex, "room_reward", result2.Name)
+                end
+            end
+        end
     end
 
     return result
