@@ -25,6 +25,8 @@ local CoopControl = ModRequire "../logic/CoopControl.lua"
 local Events = ModRequire "../logic/Events.lua"
 ---@type LootRegistry
 local LootRegistry = ModRequire "../logic/loot/LootRegistry.lua"
+---@type RoomExitSelection
+local RoomExitSelection = ModRequire "../logic/RoomExitSelection.lua"
 
 ---@class RunHooks : SimpleHook
 local RunHooks = SimpleHook.New()
@@ -118,9 +120,16 @@ function RunHooks.wrap.CheckRoomExitsReady(baseFun, ...)
             result = baseFun(...)
         end, ...)
 
+        if result then
+            RoomExitSelection.Begin()
+        end
         return result
     else
-        return baseFun(...)
+        local result = baseFun(...)
+        if result then
+            RoomExitSelection.Begin()
+        end
+        return result
     end
 end
 
@@ -162,6 +171,7 @@ function RunHooks.wrap.KillHero(baseFun, ...)
 end
 
 function RunHooks.pre.LeaveRoom(currentRun, door)
+    RoomExitSelection.Cancel()
     Events.run:trigger("roomPreLeave", currentRun, door)
 end
 
@@ -206,6 +216,7 @@ function RunHooks.pre.OnAllEnemiesDead()
 end
 
 function RunHooks.pre.StartRoom()
+    RoomExitSelection.Reset()
     Events.run:trigger("roomPreStart")
 end
 
