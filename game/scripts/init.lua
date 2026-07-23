@@ -3,8 +3,14 @@
 -- Licensed under the MIT license. See LICENSE file in the project root for details.
 --
 
+print("TN_Coop:Init module load")
+
+---@type Log
+local Log = ModRequire "utils/Log.lua"
+
 -- Load menu and add gamemode button
 ModRequire "mainmenu/CoopMenu.lua"
+Log.Write("TN_Coop:Init init.lua loaded")
 
 -- Get current gamemode
 local _, data = GetTempRuntimeData("Gamemode")
