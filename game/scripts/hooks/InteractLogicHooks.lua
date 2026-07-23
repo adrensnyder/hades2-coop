@@ -11,8 +11,23 @@ local HeroContext = ModRequire "../logic/HeroContext.lua"
 local SimpleHook = ModRequire "../utils/SimpleHook.lua"
 ---@type Events
 local Events = ModRequire "../logic/Events.lua"
+---@type LootRegistry
+local LootRegistry = ModRequire "../logic/loot/LootRegistry.lua"
 
 local InteractLogicHooks = SimpleHook.New()
+
+---@param item table
+---@param fallbackHero table
+---@return table
+local function resolveHero(item, fallbackHero)
+    if item and item.ObjectId then
+        local hero = LootRegistry.GetHero(item.ObjectId)
+        if hero then
+            return hero
+        end
+    end
+    return fallbackHero
+end
 
 function InteractLogicHooks.wrap.OnUsed(_OnUsed, args)
     if type(args[1]) == "function" then
@@ -22,20 +37,16 @@ function InteractLogicHooks.wrap.OnUsed(_OnUsed, args)
                 return
             end
 
-            local hero = CoopPlayers.GetHeroByUnit(triggerArgs.UserId)
+            local interactingHero = CoopPlayers.GetHeroByUnit(triggerArgs.UserId)
 
-            if item.UsedByHero and item.UsedByHero ~= hero then
-                -- Don't collect LobAmmoPack for by wrong player
+            if item.UsedByHero and item.UsedByHero ~= interactingHero then
                 return
             end
 
-            local mainHero = HeroContext.GetDefaultHero()
+            local hero = resolveHero(item, interactingHero)
 
             local functionName = triggerArgs.AttachedTable and triggerArgs.AttachedTable.OnUsedFunctionName
-            if functionName == "UseEscapeDoor" and hero ~= mainHero then
-                -- Pact door
-                -- Disable control for a second player
-                -- A second player in context resets weapon choice for the first player
+            if functionName == "UseEscapeDoor" and hero ~= HeroContext.GetDefaultHero() then
                 return;
             else
                 HeroContext.RunWithHeroContext(
@@ -50,8 +61,11 @@ function InteractLogicHooks.wrap.OnUsed(_OnUsed, args)
         _OnUsed({
             args[1],
             function(triggerArgs)
+                local item = triggerArgs.TriggeredByTable
+                local interactingHero = CoopPlayers.GetHeroByUnit(triggerArgs.UserId)
+                local hero = resolveHero(item, interactingHero)
                 HeroContext.RunWithHeroContext(
-                    CoopPlayers.GetHeroByUnit(triggerArgs.UserId),
+                    hero,
                     args[2],
                     triggerArgs
                 )
@@ -64,10 +78,11 @@ function InteractLogicHooks.wrap.OnActiveUseTarget(baseFun, args)
     if type(args[1]) == "function" then
         baseFun {
             function(triggerArgs)
-                local hero = CoopPlayers.GetHeroByUnit(triggerArgs.UserId)
-                local mainHero = HeroContext.GetDefaultHero()
+                local item = triggerArgs.TriggeredByTable
+                local interactingHero = CoopPlayers.GetHeroByUnit(triggerArgs.UserId)
+                local hero = resolveHero(item, interactingHero)
                 local functionName = triggerArgs.AttachedTable and triggerArgs.AttachedTable.OnUsedFunctionName
-                if functionName == "UseEscapeDoor" and hero ~= mainHero then
+                if functionName == "UseEscapeDoor" and hero ~= HeroContext.GetDefaultHero() then
                     return;
                 end
 
@@ -87,10 +102,11 @@ function InteractLogicHooks.wrap.OnActiveUseTargetLost(baseFun, args)
     if type(args[1]) == "function" then
         baseFun {
             function(triggerArgs)
-                local hero = CoopPlayers.GetHeroByUnit(triggerArgs.UserId)
-                local mainHero = HeroContext.GetDefaultHero()
+                local item = triggerArgs.TriggeredByTable
+                local interactingHero = CoopPlayers.GetHeroByUnit(triggerArgs.UserId)
+                local hero = resolveHero(item, interactingHero)
                 local functionName = triggerArgs.AttachedTable and triggerArgs.AttachedTable.OnUsedFunctionName
-                if functionName == "UseEscapeDoor" and hero ~= mainHero then
+                if functionName == "UseEscapeDoor" and hero ~= HeroContext.GetDefaultHero() then
                     return;
                 end
 

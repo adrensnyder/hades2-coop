@@ -13,25 +13,22 @@ local HeroContextProxyStore = ModRequire "../HeroContextProxyStore.lua"
 local Events = ModRequire "../Events.lua"
 ---@type LootQuery
 local LootQuery = ModRequire "LootQuery.lua"
+---@type LootRegistry
+local LootRegistry = ModRequire "LootRegistry.lua"
 
 ---@class LootShared : ILootDelivery
 local LootShared = {}
 
 function LootShared.InitHooks()
     Events.run:on("newRunStarted", LootShared.Reset)
+    Events.run:on("roomPreLeave", LootShared.OnRoomPreLeave)
 end
 
 ---@param baseFun fun(run: table, room: table)
 ---@param run table
 ---@param room table
 function LootShared.OnUnlockedRewardedRoom(baseFun, run, room)
-    local playerIndex = LootQuery.UseNextHeroForLoot()
-    if playerIndex then
-        room.CoopModPlayerId = playerIndex
-        HeroContext.RunWithHeroContext(CoopPlayers.GetHero(playerIndex), baseFun, run, room)
-    else
-        baseFun(run, room)
-    end
+    baseFun(run, room)
 end
 
 ---@param baseFun fun(eventSource: table, args: table)
@@ -39,24 +36,21 @@ end
 ---@param args table
 function LootShared.SpawnRoomReward(baseFun, eventSource, args)
     local room = CurrentRun.CurrentRoom
-    local roomRewardPredefinedPlayerId = room.CoopModPlayerId
 
-    local hero = roomRewardPredefinedPlayerId and CoopPlayers.GetHero(roomRewardPredefinedPlayerId) or CurrentRun.Hero
+    local playerIndex = LootQuery.PeekNextHeroForLoot()
+    local hero
+    if playerIndex then
+        hero = CoopPlayers.GetHero(playerIndex)
+    else
+        hero = CoopPlayers.GetAliveHeroes()[1] or CurrentRun.Hero
+    end
 
     if hero.IsDead then
-        local alternativePlayerIndex
-        if roomRewardPredefinedPlayerId then
-            alternativePlayerIndex = LootQuery.UseNextHeroForLoot()
-
-            if not alternativePlayerIndex then
-                DebugPrint { Text = "Cannot spawn a loot for a player. Cannot choose alternative hero" }
-                return baseFun(eventSource, args)
-            end
-
-            hero = CoopPlayers.GetHero(alternativePlayerIndex)
+        local altIndex = LootQuery.PeekNextHeroForLoot()
+        if altIndex then
+            hero = CoopPlayers.GetHero(altIndex)
         else
             hero = CoopPlayers.GetAliveHeroes()[1]
-
             if not hero then
                 DebugPrint { Text = "Cannot spawn a loot for a player. All players are dead" }
                 return baseFun(eventSource, args)
@@ -64,12 +58,26 @@ function LootShared.SpawnRoomReward(baseFun, eventSource, args)
         end
     end
 
-    return HeroContext.RunWithHeroContextAwait(hero, baseFun, eventSource, args)
+    local result = HeroContext.RunWithHeroContextAwait(hero, baseFun, eventSource, args)
+
+    if result and result.ObjectId then
+        local ownerIndex = playerIndex or CoopPlayers.GetPlayerByHero(hero) or 1
+        LootRegistry.Register(result.ObjectId, ownerIndex, "room_reward", result.Name)
+    end
+
+    return result
 end
 
 function LootShared.Reset()
     HeroContextProxyStore.GetOrCreate(CurrentRun, "LootTypeHistory"):Reset()
     LootQuery.Reset()
+    LootRegistry.RemoveAll()
+end
+
+---@param currentRun table
+---@param door table
+function LootShared.OnRoomPreLeave(currentRun, door)
+    LootRegistry.CancelAllPending()
 end
 
 ---@param baseFun fun(args: table): table

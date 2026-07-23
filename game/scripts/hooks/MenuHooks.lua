@@ -15,6 +15,8 @@ local SimpleHook = ModRequire "../utils/SimpleHook.lua"
 local CoopControl = ModRequire "../logic/CoopControl.lua"
 ---@type GameStateEx
 local GameStateEx = ModRequire "../logic/GameStateEx.lua"
+---@type LootRegistry
+local LootRegistry = ModRequire "../logic/loot/LootRegistry.lua"
 
 ---@class MenuHooks : SimpleHook
 local MenuHooks = SimpleHook.New()
@@ -56,6 +58,25 @@ end
 function MenuHooks.HookUiControl(funName)
     HookUtils.wrap(funName, function(originalFun, ...)
         local playerId = CoopPlayers.GetCurrentPlayerId()
+
+        if funName == "OpenUpgradeChoiceMenu" then
+            local source = select(1, ...)
+            if source and source.ObjectId then
+                local entry = LootRegistry.Get(source.ObjectId)
+                if entry then
+                    playerId = entry.playerId
+                    LootRegistry.Activate(source.ObjectId)
+                    local capturedObjectId = source.ObjectId
+                    HookUtils.onPreFunctionOnce("UnfreezePlayerUnit", function()
+                        local e = LootRegistry.Get(capturedObjectId)
+                        if e and e.state == "active" then
+                            LootRegistry.Cancel(capturedObjectId)
+                        end
+                    end)
+                end
+            end
+        end
+
         CoopControl.SwitchControlForMenu(playerId)
 
         HookUtils.onPreFunctionOnce("UnfreezePlayerUnit", function()
@@ -110,7 +131,6 @@ end
 
 function MenuHooks.wrap.DisplayTextLine(baseFun, screen, source, line, parentLine)
     if line.Choices then
-        -- Only this solution works
         SetConfigOption { Name = "AllowControlHotSwap", Value = true }
 
         HookUtils.onPreFunctionOnce("UnfreezePlayerUnit", function(name)

@@ -11,26 +11,33 @@ local HeroContextProxy = ModRequire "../logic/HeroContextProxy.lua"
 local HeroContextProxyStore = ModRequire "../logic/HeroContextProxyStore.lua"
 ---@type Events
 local Events = ModRequire "../logic/Events.lua"
+---@type CoopPlayers
+local CoopPlayers = ModRequire "../logic/CoopPlayers.lua"
+---@type HeroContext
+local HeroContext = ModRequire "../logic/HeroContext.lua"
+---@type HookUtils
+local HookUtils = ModRequire "../utils/HookUtils.lua"
 
 ---@type ILootDelivery
 local LootDelivery = ModRequire "../logic/loot/LootInterface.lua"
+---@type LootRegistry
+local LootRegistry = ModRequire "../logic/loot/LootRegistry.lua"
 
 ---@class LootHooks : SimpleHook
 local LootHooks = SimpleHook.New()
 
----@private
----@type table | nil
-LootHooks.BlindLootHero = nil
-
--- Select hero for blind loot
 function LootHooks.wrap.UnwrapRandomLoot(baseFun, ...)
-    LootHooks.BlindLootHero = CurrentRun.Hero
+    local hero = CurrentRun.Hero
+    local playerId = CoopPlayers.GetPlayerByHero(hero)
 
     baseFun(...)
 
     for lootId, lootData in pairs(LootObjects) do
         if not lootData.Cost then
-            CoopUseItem(CurrentRun.Hero.ObjectId, lootId)
+            if playerId then
+                LootRegistry.Register(lootId, playerId, "store", lootData.Name)
+            end
+            CoopUseItem(hero.ObjectId, lootId)
             break
         end
     end
@@ -52,20 +59,16 @@ end
 
 ---@private
 function LootHooks.wrap.GiveLoot(baseFun, args)
-    local hero = LootHooks.UseBlindLootHero()
-    if hero then
-        return LootDelivery.GiveBlindLoot(baseFun, hero, args)
-    else
-        return LootDelivery.GiveLoot(baseFun, args)
-    end
-end
+    local hero = nil
 
----@private
-function LootHooks.UseBlindLootHero()
-    local hero = LootHooks.BlindLootHero
+    if args and args.SpawnPoint then
+        hero = LootRegistry.GetHero(args.SpawnPoint)
+    end
+
     if hero then
-        LootHooks.BlindLootHero = nil
-        return hero
+        return HeroContext.RunWithHeroContextReturn(hero, baseFun, args)
+    else
+        return baseFun(args)
     end
 end
 
@@ -85,6 +88,28 @@ function LootHooks.wrap.SpawnRoomReward(baseFun, ...)
     CurrentRun.CurrentRoom.DisableRewardMagnetisim = true
 
     return LootDelivery.SpawnRoomReward(baseFun, ...)
+end
+
+---@private
+function LootHooks.InitGameHooks()
+    HookUtils.wrap("HandleUpgradeChoiceSelection", function(baseFun, screen, button, args)
+        local source = screen and screen.Source
+        if source and source.ObjectId then
+            LootRegistry.Consume(source.ObjectId)
+        end
+        return baseFun(screen, button, args)
+    end)
+
+    HookUtils.wrap("CloseUpgradeChoiceScreen", function(baseFun, screen, button)
+        local source = screen and screen.Source
+        if source and source.ObjectId then
+            local entry = LootRegistry.Get(source.ObjectId)
+            if entry and entry.state == "active" then
+                LootRegistry.Cancel(source.ObjectId)
+            end
+        end
+        return baseFun(screen, button)
+    end)
 end
 
 --- Warning: this function mutates the game state in ChooseNextRoomData
