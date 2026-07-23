@@ -40,7 +40,17 @@ end
 function LootShared.SpawnRoomReward(baseFun, eventSource, args)
     local room = CurrentRun.CurrentRoom
 
-    local playerIndex = LootQuery.PeekNextHeroForLoot()
+    local pendingRewards = CurrentRun.CoopPendingRoomRewards
+    local pendingOwner
+    if pendingRewards then
+        for playerId in pairs(pendingRewards) do
+            if not pendingOwner then
+                pendingOwner = playerId
+            end
+        end
+    end
+
+    local playerIndex = pendingOwner or LootQuery.PeekNextHeroForLoot()
     local hero
     if playerIndex then
         hero = CoopPlayers.GetHero(playerIndex)
@@ -61,7 +71,15 @@ function LootShared.SpawnRoomReward(baseFun, eventSource, args)
         end
     end
 
-    local result = HeroContext.RunWithHeroContextAwait(hero, baseFun, eventSource, args)
+    local rewardDescriptor = pendingRewards and pendingRewards[playerIndex]
+    local spawnArgs = args or {}
+    if rewardDescriptor and rewardDescriptor.ChosenRewardType then
+        spawnArgs = MergeTables(spawnArgs, {
+            RewardOverride = rewardDescriptor.ChosenRewardType,
+            LootName = rewardDescriptor.ForceLootName,
+        })
+    end
+    local result = HeroContext.RunWithHeroContextAwait(hero, baseFun, eventSource, spawnArgs)
 
     if result and result.ObjectId then
         local ownerIndex = playerIndex or CoopPlayers.GetPlayerByHero(hero) or 1
@@ -71,6 +89,15 @@ function LootShared.SpawnRoomReward(baseFun, eventSource, args)
     if Config.RewardMode == "Independent" then
         local firstOwnerIndex = playerIndex or CoopPlayers.GetPlayerByHero(hero) or 1
         local otherIndex = LootQuery.GetOtherPlayerIndex(firstOwnerIndex)
+        if pendingRewards then
+            otherIndex = nil
+            for candidateId in pairs(pendingRewards) do
+                if candidateId ~= firstOwnerIndex then
+                    otherIndex = candidateId
+                    break
+                end
+            end
+        end
         if otherIndex and CoopPlayers.GetPlayersCount() >= 2 then
             local otherHero = CoopPlayers.GetHero(otherIndex)
             if otherHero and not otherHero.IsDead then
@@ -83,17 +110,28 @@ function LootShared.SpawnRoomReward(baseFun, eventSource, args)
                     offset = CalcOffset(math.rad(angle + 180), 110)
                 end
 
-                local offsetArgs = MergeTables(args or {}, {
+                local offsetArgs = MergeTables(spawnArgs, {
                     SpawnRewardOnId = result and result.ObjectId,
                     OffsetX = offset.X,
                     OffsetY = offset.Y,
                 })
+                local otherDescriptor = pendingRewards and pendingRewards[otherIndex]
+                if otherDescriptor and otherDescriptor.ChosenRewardType then
+                    offsetArgs = MergeTables(offsetArgs, {
+                        RewardOverride = otherDescriptor.ChosenRewardType,
+                        LootName = otherDescriptor.ForceLootName,
+                    })
+                end
                 local result2 = HeroContext.RunWithHeroContextAwait(otherHero, baseFun, eventSource, offsetArgs)
                 if result2 and result2.ObjectId then
                     LootRegistry.Register(result2.ObjectId, otherIndex, "room_reward", result2.Name)
                 end
             end
         end
+    end
+
+    if pendingRewards then
+        CurrentRun.CoopPendingRoomRewards = nil
     end
 
     return result

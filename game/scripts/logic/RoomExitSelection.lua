@@ -99,7 +99,7 @@ function RoomExitSelection.RecordSelection(playerId, doorId, rewardDescriptor, n
     selection.Confirmed = true
     if playerId == state.AuthoritativePlayerId then
         state.AuthoritativeDoorId = doorId
-        state.AuthoritativeNextRoom = nextRoom
+        state.AuthoritativeNextRoom = nextRoom and (nextRoom.GenusName or nextRoom.Name)
     end
     return true
 end
@@ -158,11 +158,28 @@ end
 local function getRewardDescriptor(door)
     local room = door and door.Room
     return {
-        Room = room,
         RewardStoreName = room and room.RewardStoreName,
-        RewardStore = room and room.RewardStore,
+        ChosenRewardType = room and room.ChosenRewardType,
+        ForceLootName = room and room.ForceLootName,
+        RewardOverrides = room and room.RewardOverrides,
         RoomName = room and (room.GenusName or room.Name),
     }
+end
+
+function RoomExitSelection.PrepareRewardDelivery()
+    local state = getState()
+    if not state or state.Phase ~= "Transitioning" then
+        return
+    end
+
+    local pending = {}
+    for _, playerId in ipairs(state.EligiblePlayerIds) do
+        local selection = state.PlayerSelections[playerId]
+        if selection and selection.RewardDescriptor then
+            pending[playerId] = selection.RewardDescriptor
+        end
+    end
+    CurrentRun.CoopPendingRoomRewards = pending
 end
 
 ---@param playerId number
@@ -205,6 +222,7 @@ function RoomExitSelection.RecordDoorInteraction(playerId, door, triggerArgs, us
 
     local authoritative = pendingInteractions[state.AuthoritativePlayerId]
     if authoritative and authoritative.UseDoor then
+        RoomExitSelection.PrepareRewardDelivery()
         authoritative.UseDoor(authoritative.TriggerArgs)
         pendingInteractions = {}
     else
