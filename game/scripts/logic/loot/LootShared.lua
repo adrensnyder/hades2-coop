@@ -24,6 +24,7 @@ local LootShared = {}
 function LootShared.InitHooks()
     Events.run:on("newRunStarted", LootShared.Reset)
     Events.run:on("roomPreLeave", LootShared.OnRoomPreLeave)
+    Events.run:on("mapLoaded", LootShared.OnMapLoaded)
 end
 
 ---@param baseFun fun(run: table, room: table)
@@ -94,6 +95,10 @@ end
 ---@param door table
 function LootShared.OnRoomPreLeave(currentRun, door)
     LootRegistry.CancelAllPending()
+end
+
+function LootShared.OnMapLoaded()
+    LootRegistry.ResetActiveToPending()
 end
 
 ---@param baseFun fun(args: table): table

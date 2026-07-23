@@ -97,7 +97,14 @@ function LootHooks.InitGameHooks()
         if source and source.ObjectId then
             LootRegistry.Consume(source.ObjectId)
         end
-        return baseFun(screen, button, args)
+        local ok, result = pcall(baseFun, screen, button, args)
+        if not ok then
+            DebugPrint { Text = "HandleUpgradeChoiceSelection error: " .. tostring(result) }
+            if source and source.ObjectId then
+                LootRegistry.Cancel(source.ObjectId)
+            end
+        end
+        return result
     end)
 
     HookUtils.wrap("CloseUpgradeChoiceScreen", function(baseFun, screen, button)

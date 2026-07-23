@@ -121,6 +121,14 @@ function LootRegistry.CancelAllPending()
     end
 end
 
+function LootRegistry.ResetActiveToPending()
+    for _, entry in pairs(getRegistry()) do
+        if entry.state == "active" then
+            entry.state = "pending"
+        end
+    end
+end
+
 function LootRegistry.RemoveAll()
     local room = CurrentRun and CurrentRun.CurrentRoom
     if room then

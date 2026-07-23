@@ -23,6 +23,8 @@ local HeroEx = ModRequire "../logic/HeroEx.lua"
 local CoopControl = ModRequire "../logic/CoopControl.lua"
 ---@type Events
 local Events = ModRequire "../logic/Events.lua"
+---@type LootRegistry
+local LootRegistry = ModRequire "../logic/loot/LootRegistry.lua"
 
 ---@class RunHooks : SimpleHook
 local RunHooks = SimpleHook.New()
@@ -133,6 +135,7 @@ end
 
 function RunHooks.wrap.KillHero(baseFun, ...)
     CurrentRun.Hero.IsDead = true
+    LootRegistry.CancelAllPending()
     if not CoopPlayers.HasAlivePlayers() then
         -- Handle death for player 1 only
         local mainHero = CoopPlayers.GetMainHero()
