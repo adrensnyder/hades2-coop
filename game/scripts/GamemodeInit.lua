@@ -17,6 +17,8 @@ local LootInterface = ModRequire "logic/loot/LootInterface.lua"
 local HeroContext = ModRequire "logic/HeroContext.lua"
 ---@type CoopCamera
 local CoopCamera = ModRequire "logic/CoopCamera.lua"
+---@type RoomExitSelection
+local RoomExitSelection = ModRequire "logic/RoomExitSelection.lua"
 
 local Gamemode = {}
 
@@ -73,6 +75,7 @@ function Gamemode.RegisterEngineHandlers()
 
         CoopCamera.InitHooks()
         LootInterface.InitHooks()
+        RoomExitSelection.InitHooks()
 
         CoopGame.Init()
 

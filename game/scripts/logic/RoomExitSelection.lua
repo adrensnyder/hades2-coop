@@ -5,10 +5,19 @@
 
 ---@type CoopPlayers
 local CoopPlayers = ModRequire "CoopPlayers.lua"
+---@type Events
+local Events = ModRequire "Events.lua"
 
 ---@class RoomExitSelection
 local RoomExitSelection = {}
 local pendingInteractions = {}
+
+function RoomExitSelection.InitHooks()
+    Events.run:on("newRunStarted", RoomExitSelection.Reset)
+    Events.run:on("mapLoaded", RoomExitSelection.Reset)
+    Events.run:on("roomPreLeave", RoomExitSelection.Cancel)
+    Events.engine:on("presave", RoomExitSelection.Cancel)
+end
 
 local function getRoom()
     return CurrentRun and CurrentRun.CurrentRoom
