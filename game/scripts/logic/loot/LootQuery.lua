@@ -47,24 +47,28 @@ function LootQuery.CommitCounter(playerId)
     CurrentRun.CoopLootCounter = playerId
 end
 
---- Get the index of the player who is NOT at the current counter position.
+--- Get an alive player other than the excluded player.
+---@param excludedPlayerId number|nil
 ---@return number | nil
-function LootQuery.GetOtherPlayerIndex()
+function LootQuery.GetOtherPlayerIndex(excludedPlayerId)
     local playersCount = CoopPlayers.GetPlayersCount()
     if playersCount <= 1 then
         return
     end
 
     local current = CurrentRun.CoopLootCounter
-    local other = current + 1
-    if other > playersCount then
-        other = 1
+    for offset = 1, playersCount do
+        local playerId = current + offset
+        if playerId > playersCount then
+            playerId = playerId - playersCount
+        end
+
+        local hero = CoopPlayers.GetHero(playerId)
+        if playerId ~= excludedPlayerId and hero and not hero.IsDead then
+            return playerId
+        end
     end
 
-    local hero = CoopPlayers.GetHero(other)
-    if hero and not hero.IsDead then
-        return other
-    end
     return nil
 end
 

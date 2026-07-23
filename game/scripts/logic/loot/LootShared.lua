@@ -69,7 +69,8 @@ function LootShared.SpawnRoomReward(baseFun, eventSource, args)
     end
 
     if Config.RewardMode == "Independent" then
-        local otherIndex = LootQuery.GetOtherPlayerIndex()
+        local firstOwnerIndex = playerIndex or CoopPlayers.GetPlayerByHero(hero) or 1
+        local otherIndex = LootQuery.GetOtherPlayerIndex(firstOwnerIndex)
         if otherIndex and CoopPlayers.GetPlayersCount() >= 2 then
             local otherHero = CoopPlayers.GetHero(otherIndex)
             if otherHero and not otherHero.IsDead then

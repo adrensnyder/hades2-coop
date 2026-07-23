@@ -63,7 +63,7 @@ end
 ---@param objectId number
 function LootRegistry.Consume(objectId)
     local entry = getRegistry()[objectId]
-    if entry and entry.state ~= "consumed" then
+    if entry and (entry.state == "pending" or entry.state == "active") then
         entry.state = "consumed"
         LootQuery.CommitCounter(entry.playerId)
     end
@@ -72,7 +72,7 @@ end
 ---@param objectId number
 function LootRegistry.Cancel(objectId)
     local entry = getRegistry()[objectId]
-    if entry and entry.state ~= "consumed" then
+    if entry and (entry.state == "pending" or entry.state == "active") then
         entry.state = "cancelled"
     end
 end

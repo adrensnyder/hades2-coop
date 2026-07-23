@@ -95,10 +95,14 @@ function LootHooks.InitGameHooks()
     HookUtils.wrap("HandleUpgradeChoiceSelection", function(baseFun, screen, button, args)
         local source = screen and screen.Source
         if source and source.ObjectId then
-            LootRegistry.Consume(source.ObjectId)
+            LootRegistry.Activate(source.ObjectId)
         end
         local ok, result = pcall(baseFun, screen, button, args)
-        if not ok then
+        if ok then
+            if source and source.ObjectId then
+                LootRegistry.Consume(source.ObjectId)
+            end
+        else
             DebugPrint { Text = "HandleUpgradeChoiceSelection error: " .. tostring(result) }
             if source and source.ObjectId then
                 LootRegistry.Cancel(source.ObjectId)
