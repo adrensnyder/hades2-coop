@@ -80,6 +80,13 @@ function LootShared.SpawnRoomReward(baseFun, eventSource, args)
         })
     end
     local result = HeroContext.RunWithHeroContextAwait(hero, baseFun, eventSource, spawnArgs)
+    if rewardDescriptor then
+        DebugPrint { Text = string.format(
+            "LootDelivery: player=%s reward=%s object=%s",
+            tostring(playerIndex), tostring(rewardDescriptor.ChosenRewardType),
+            tostring(result and result.ObjectId)
+        ) }
+    end
 
     if result and result.ObjectId then
         local ownerIndex = playerIndex or CoopPlayers.GetPlayerByHero(hero) or 1
@@ -123,6 +130,13 @@ function LootShared.SpawnRoomReward(baseFun, eventSource, args)
                     })
                 end
                 local result2 = HeroContext.RunWithHeroContextAwait(otherHero, baseFun, eventSource, offsetArgs)
+                if otherDescriptor then
+                    DebugPrint { Text = string.format(
+                        "LootDelivery: player=%s reward=%s object=%s",
+                        tostring(otherIndex), tostring(otherDescriptor.ChosenRewardType),
+                        tostring(result2 and result2.ObjectId)
+                    ) }
+                end
                 if result2 and result2.ObjectId then
                     LootRegistry.Register(result2.ObjectId, otherIndex, "room_reward", result2.Name)
                 end

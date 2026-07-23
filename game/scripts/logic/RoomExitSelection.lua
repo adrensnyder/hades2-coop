@@ -110,6 +110,10 @@ function RoomExitSelection.RecordSelection(playerId, doorId, rewardDescriptor, n
         state.AuthoritativeDoorId = doorId
         state.AuthoritativeNextRoom = nextRoom and (nextRoom.GenusName or nextRoom.Name)
     end
+    DebugPrint { Text = string.format(
+        "RoomExitSelection: player=%s door=%s room=%s confirmed=true",
+        tostring(playerId), tostring(doorId), tostring(state.AuthoritativeNextRoom)
+    ) }
     return true
 end
 
@@ -135,6 +139,7 @@ function RoomExitSelection.BeginTransition()
     end
     state.Phase = "Transitioning"
     state.LeaveRoomCalled = true
+    DebugPrint { Text = "RoomExitSelection: all eligible players confirmed; committing one transition" }
     return true
 end
 
@@ -189,6 +194,7 @@ function RoomExitSelection.PrepareRewardDelivery()
         end
     end
     CurrentRun.CoopPendingRoomRewards = pending
+    DebugPrint { Text = "RoomExitSelection: prepared destination reward descriptors" }
 end
 
 ---@param playerId number
