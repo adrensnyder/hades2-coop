@@ -8,6 +8,7 @@ local CoopPlayers = ModRequire "CoopPlayers.lua"
 
 ---@class RoomExitSelection
 local RoomExitSelection = {}
+local pendingInteractions = {}
 
 local function getRoom()
     return CurrentRun and CurrentRun.CurrentRoom
@@ -58,6 +59,7 @@ function RoomExitSelection.Begin()
         PlayerSelections = selections,
         LeaveRoomCalled = false,
     }
+    pendingInteractions = {}
     return room.CoopRoomExitSelection
 end
 
@@ -132,6 +134,7 @@ function RoomExitSelection.Cancel()
     if state and state.Phase ~= "Completed" then
         state.Phase = "Cancelled"
     end
+    pendingInteractions = {}
 end
 
 function RoomExitSelection.Complete()
@@ -139,6 +142,7 @@ function RoomExitSelection.Complete()
     if state then
         state.Phase = "Completed"
     end
+    pendingInteractions = {}
 end
 
 function RoomExitSelection.Reset()
@@ -146,6 +150,67 @@ function RoomExitSelection.Reset()
     if room then
         room.CoopRoomExitSelection = nil
     end
+    pendingInteractions = {}
+end
+
+---@param door table
+---@return table
+local function getRewardDescriptor(door)
+    local room = door and door.Room
+    return {
+        Room = room,
+        RewardStoreName = room and room.RewardStoreName,
+        RewardStore = room and room.RewardStore,
+        RoomName = room and (room.GenusName or room.Name),
+    }
+end
+
+---@param playerId number
+---@param door table
+---@param triggerArgs table
+---@param useDoor fun(triggerArgs: table)
+---@return boolean, boolean
+function RoomExitSelection.RecordDoorInteraction(playerId, door, triggerArgs, useDoor)
+    local state = getState()
+    if not state or state.Phase ~= "Collecting" or not RoomExitSelection.IsEligible(playerId) then
+        return false, false
+    end
+    if not door or not door.ObjectId or not door.Room then
+        return false, false
+    end
+
+    local selection = state.PlayerSelections[playerId]
+    if selection.Confirmed then
+        return true, false
+    end
+
+    RoomExitSelection.RecordSelection(
+        playerId,
+        door.ObjectId,
+        getRewardDescriptor(door),
+        door.Room
+    )
+    pendingInteractions[playerId] = {
+        TriggerArgs = triggerArgs,
+        UseDoor = useDoor,
+    }
+
+    if not RoomExitSelection.IsReady() then
+        return true, false
+    end
+
+    if not RoomExitSelection.BeginTransition() then
+        return true, false
+    end
+
+    local authoritative = pendingInteractions[state.AuthoritativePlayerId]
+    if authoritative and authoritative.UseDoor then
+        authoritative.UseDoor(authoritative.TriggerArgs)
+        pendingInteractions = {}
+    else
+        RoomExitSelection.Cancel()
+    end
+    return true, true
 end
 
 ---@return table|nil
