@@ -120,7 +120,26 @@ end
 ---@param loot table
 ---@param hero table
 function LootShared.CanUseHeroLoot(loot, hero)
-    return true
+    if not loot or not hero then
+        return false
+    end
+
+    local lootId = loot.ObjectId or loot.ObjectID or loot.Id
+    if not lootId then
+        return true
+    end
+
+    local entry = LootRegistry.Get(lootId)
+    if not entry then
+        return true
+    end
+
+    local playerId = CoopPlayers.GetPlayerByHero(hero)
+    if not playerId then
+        return false
+    end
+
+    return entry.playerId == playerId and entry.state ~= "consumed" and entry.state ~= "cancelled"
 end
 
 return LootShared
