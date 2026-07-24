@@ -3,12 +3,13 @@
 -- Licensed under the MIT license. See LICENSE file in the project root for details.
 --
 
-print("TN_Coop:Menu module load")
+---@type Log
+local Log = ModRequire "../utils/Log.lua"
 
 ---@type PlayerDeviceData[]
 local SelectedGuiControl = {}
----@type Log
-local Log = ModRequire "../utils/Log.lua"
+
+Log.Write("TN_Coop:Menu module load")
 
 ---@return PlayerDeviceData
 local function GetCurrentControl()

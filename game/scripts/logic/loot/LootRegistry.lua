@@ -203,9 +203,9 @@ function LootRegistry.DebugPrint()
             tostring(entry.playerId), entry.state, entry.source))
     end
     if #parts > 0 then
-        DebugPrint { Text = "CoopLootRegistry: " .. table.concat(parts, " | ") }
+        Log.Write("CoopLootRegistry: " .. table.concat(parts, " | "))
     else
-        DebugPrint { Text = "CoopLootRegistry: (empty)" }
+        Log.Write("CoopLootRegistry: (empty)")
     end
 end
 
