@@ -7,6 +7,8 @@
 local CoopPlayers = ModRequire "../CoopPlayers.lua"
 ---@type LootQuery
 local LootQuery = ModRequire "LootQuery.lua"
+---@type Log
+local Log = ModRequire "../utils/Log.lua"
 
 ---@alias LootRegistryState "pending" | "active" | "consumed" | "cancelled"
 ---@alias LootRegistrySource "room_reward" | "store" | "hermes_followup" | "bonus"
@@ -79,8 +81,22 @@ function LootRegistry.Consume(objectId)
         entry.state = "consumed"
         if entry.source == "room_reward" then
             getRoomClaims()[entry.playerId] = true
+            Log.Write(string.format(
+                "TN_Coop:Registry CONSUME objectId=%s player=%s source=%s roomClaimSet=true counter=%s",
+                tostring(objectId),
+                tostring(entry.playerId),
+                tostring(entry.source),
+                tostring(CurrentRun and CurrentRun.CoopLootCounter)
+            ))
         end
         LootQuery.CommitCounter(entry.playerId)
+    else
+        Log.Write(string.format(
+            "TN_Coop:Registry CONSUME SKIP objectId=%s entry=%s state=%s",
+            tostring(objectId),
+            tostring(entry ~= nil),
+            tostring(entry and entry.state)
+        ))
     end
 end
 
@@ -134,11 +150,19 @@ function LootRegistry.HasRoomRewardClaim(playerId)
     -- Treat an active room reward as locked so the same player cannot re-enter
     -- the pickup flow before resolving or cancelling the open menu.
     if getRoomClaims()[playerId] == true then
+        Log.Write(string.format(
+            "TN_Coop:Registry HasClaim player=%s claimFromRoomClaims=true",
+            tostring(playerId)
+        ))
         return true
     end
 
     for _, entry in pairs(getRegistry()) do
         if entry.playerId == playerId and entry.source == "room_reward" and entry.state == "active" then
+            Log.Write(string.format(
+                "TN_Coop:Registry HasClaim player=%s claimFromActiveEntry=true",
+                tostring(playerId)
+            ))
             return true
         end
     end
