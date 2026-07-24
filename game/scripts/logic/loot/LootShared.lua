@@ -11,14 +11,12 @@ local CoopPlayers = ModRequire "../CoopPlayers.lua"
 local HeroContextProxyStore = ModRequire "../HeroContextProxyStore.lua"
 ---@type Events
 local Events = ModRequire "../Events.lua"
+---@type LootDeliveryCommon
+local LootDeliveryCommon = ModRequire "LootDeliveryCommon.lua"
 ---@type LootQuery
 local LootQuery = ModRequire "LootQuery.lua"
 ---@type LootRegistry
 local LootRegistry = ModRequire "LootRegistry.lua"
----@type CoopModConfig
-local Config = ModRequire "../../config.lua"
----@type Log
-local Log = ModRequire "../utils/Log.lua"
 
 ---@class LootShared : ILootDelivery
 local LootShared = {}
@@ -36,93 +34,15 @@ function LootShared.OnUnlockedRewardedRoom(baseFun, run, room)
     baseFun(run, room)
 end
 
----@param ownerIndex number
----@param hero table
----@param preSnapshot table<number, boolean>
-local function RegisterNewLoots(ownerIndex, hero, preSnapshot)
-    local registered = 0
-    for lootId, lootData in pairs(LootObjects) do
-        if not preSnapshot[lootId] and not LootRegistry.Get(lootId) then
-            if lootData and lootData.ObjectId and lootData.OnUsedFunctionName == "UseLoot" then
-                LootRegistry.Register(lootData.ObjectId, ownerIndex, "room_reward", lootData.Name)
-                registered = registered + 1
-                Log.Write(string.format(
-                    "TN_Coop:SpawnRoomReward registered bonus loot objectId=%s name=%s player=%s",
-                    tostring(lootData.ObjectId),
-                    tostring(lootData.Name),
-                    tostring(ownerIndex)
-                ))
-            end
-        end
-    end
-    return registered
-end
-
 ---@param baseFun fun(eventSource: table, args: table)
 ---@param eventSource table
 ---@param args table
 function LootShared.SpawnRoomReward(baseFun, eventSource, args)
-    local room = CurrentRun.CurrentRoom
-
-    local playerIndex = LootQuery.PeekNextHeroForLoot()
-    local hero
-    if playerIndex then
-        hero = CoopPlayers.GetHero(playerIndex)
-    else
-        hero = CoopPlayers.GetAliveHeroes()[1] or CurrentRun.Hero
+    local hero, ownerIndex = LootDeliveryCommon.SelectRewardHero()
+    if not hero then
+        return baseFun(eventSource, args)
     end
-
-    if hero.IsDead then
-        local altIndex = LootQuery.PeekNextHeroForLoot()
-        if altIndex then
-            hero = CoopPlayers.GetHero(altIndex)
-        else
-            hero = CoopPlayers.GetAliveHeroes()[1]
-            if not hero then
-                DebugPrint { Text = "Cannot spawn a loot for a player. All players are dead" }
-                return baseFun(eventSource, args)
-            end
-        end
-    end
-
-    local ownerIndex = playerIndex or CoopPlayers.GetPlayerByHero(hero) or 1
-
-    local preSnapshot = {}
-    for id in pairs(LootObjects) do
-        preSnapshot[id] = true
-    end
-
-    local result = HeroContext.RunWithHeroContextAwait(hero, baseFun, eventSource, args)
-
-    if result and result.ObjectId then
-        LootRegistry.Register(result.ObjectId, ownerIndex, "room_reward", result.Name)
-    end
-
-    RegisterNewLoots(ownerIndex, hero, preSnapshot)
-
-    if Config.RewardMode == "Independent" then
-        local firstOwnerIndex = ownerIndex
-        local otherIndex = LootQuery.GetOtherPlayerIndex(firstOwnerIndex)
-        if otherIndex and CoopPlayers.GetPlayersCount() >= 2 then
-            local otherHero = CoopPlayers.GetHero(otherIndex)
-            if otherHero and not otherHero.IsDead then
-                local preSnapshot2 = {}
-                for id in pairs(LootObjects) do
-                    preSnapshot2[id] = true
-                end
-
-                local offsetArgs = MergeTables(args, { OffsetX = (args.OffsetX or 0) + 100 })
-                local result2 = HeroContext.RunWithHeroContextAwait(otherHero, baseFun, eventSource, offsetArgs)
-                if result2 and result2.ObjectId then
-                    LootRegistry.Register(result2.ObjectId, otherIndex, "room_reward", result2.Name)
-                end
-
-                RegisterNewLoots(otherIndex, otherHero, preSnapshot2)
-            end
-        end
-    end
-
-    return result
+    return LootDeliveryCommon.SpawnRewardForHero(baseFun, eventSource, args, hero, ownerIndex)
 end
 
 function LootShared.Reset()

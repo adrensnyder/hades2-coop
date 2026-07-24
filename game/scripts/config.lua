@@ -6,19 +6,13 @@
 ---@class CoopModConfig
 local Config = {
     -- Choose loot delivery type here
-    -- Possible values: "Shared"
+    -- Possible values: "Shared", "Independent"
     --
     -- Shared - rooms generate one reward. Only one player can pick it up.
     -- The game has a query that select a player context for a reward.
     -- E.g. Player 1 boon room, meta progress room, Player 2 boon room, Player 1 boon room...
+    -- Independent - rooms generate one reward per player, with ownership tracked per reward instance.
     LootDelivery = "Shared",
-
-    -- Choose reward mode here
-    -- Possible values: "Shared", "Independent"
-    --
-    -- Shared   - one reward per room, alternating ownership between players.
-    -- Independent - one reward per player per room (each player gets their own).
-    RewardMode = "Independent",
     Debug = {
         Enabled = true,
         OneHit = false,

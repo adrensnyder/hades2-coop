@@ -17,6 +17,7 @@ local Config = ModRequire "../../config.lua"
 
 local DELIVERY_TYPE_TO_HANDLER = {
     Shared = "LootShared.lua";
+    Independent = "LootIndependent.lua";
 }
 
-return ModRequire( DELIVERY_TYPE_TO_HANDLER[Config.LootDelivery or "Shared"] or DELIVERY_TYPE_TO_HANDLER.Shared )
+return ModRequire(DELIVERY_TYPE_TO_HANDLER[Config.LootDelivery or "Shared"] or DELIVERY_TYPE_TO_HANDLER.Shared)
