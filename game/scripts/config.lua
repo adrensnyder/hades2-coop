@@ -12,7 +12,7 @@ local Config = {
     -- The game has a query that select a player context for a reward.
     -- E.g. Player 1 boon room, meta progress room, Player 2 boon room, Player 1 boon room...
     -- Independent - rooms generate one reward per player, with ownership tracked per reward instance.
-    LootDelivery = "Shared",
+    LootDelivery = "Independent",
     Debug = {
         Enabled = true,
         OneHit = false,

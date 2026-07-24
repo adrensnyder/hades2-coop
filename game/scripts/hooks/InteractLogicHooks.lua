@@ -36,6 +36,7 @@ function InteractLogicHooks.wrap.UseLoot(baseFun, usee, args, user)
         local entry = LootRegistry.Get(usee.ObjectId)
         local userIsHero = type(user) == "table"
         local playerId = userIsHero and CoopPlayers.GetPlayerByHero(user) or nil
+        local room = CurrentRun and CurrentRun.CurrentRoom
 
         if not playerId and userIsHero then
             for pid = 1, CoopPlayers.GetPlayersCount() do
@@ -50,6 +51,22 @@ function InteractLogicHooks.wrap.UseLoot(baseFun, usee, args, user)
             playerId = CoopPlayers.GetCurrentPlayerId()
         end
 
+        usee.CoopClickedByPlayer = playerId
+        if room then
+            room.CoopPendingRewardClickedBy = playerId
+        end
+
+        local assignedPlayer = entry and entry.playerId or (room and room.CoopPendingRewardOwner)
+
+        if userIsHero and usee.UsedByHero and usee.UsedByHero ~= user then
+            Log.Write(string.format(
+                "TN_Coop:UseLoot BLOCKED ownerMismatch objectId=%s userPlayer=%s",
+                tostring(usee.ObjectId),
+                tostring(playerId)
+            ))
+            return false
+        end
+
         if entry then
             Log.Write(string.format(
                 "TN_Coop:UseLoot objectId=%s source=%s state=%s entryPlayer=%s userPlayer=%s userIsHero=%s",
@@ -61,6 +78,15 @@ function InteractLogicHooks.wrap.UseLoot(baseFun, usee, args, user)
                 tostring(userIsHero)
             ))
             if entry.source == "room_reward" then
+                if playerId and assignedPlayer and playerId ~= assignedPlayer then
+                    Log.Write(string.format(
+                        "TN_Coop:UseLoot BLOCKED objectId=%s Assigned=%s ClickedBy=%s",
+                        tostring(usee.ObjectId),
+                        tostring(assignedPlayer),
+                        tostring(playerId)
+                    ))
+                    return false
+                end
                 if playerId and LootRegistry.HasRoomRewardClaim(playerId) then
                     Log.Write(string.format(
                         "TN_Coop:UseLoot BLOCKED objectId=%s userPlayer=%s",
@@ -71,6 +97,15 @@ function InteractLogicHooks.wrap.UseLoot(baseFun, usee, args, user)
                 end
             end
         elseif usee.OnUsedFunctionName == "UseLoot" then
+            if playerId and assignedPlayer and playerId ~= assignedPlayer then
+                Log.Write(string.format(
+                    "TN_Coop:UseLoot BLOCKED objectId=%s Assigned=%s ClickedBy=%s",
+                    tostring(usee.ObjectId),
+                    tostring(assignedPlayer),
+                    tostring(playerId)
+                ))
+                return false
+            end
             if playerId and LootRegistry.HasRoomRewardClaim(playerId) then
                 Log.Write(string.format(
                     "TN_Coop:UseLoot BLOCKED unregistered objectId=%s name=%s userPlayer=%s",

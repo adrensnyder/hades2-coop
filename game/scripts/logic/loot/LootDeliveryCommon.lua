@@ -12,7 +12,7 @@ local LootQuery = ModRequire "LootQuery.lua"
 ---@type LootRegistry
 local LootRegistry = ModRequire "LootRegistry.lua"
 ---@type Log
-local Log = ModRequire "../utils/Log.lua"
+local Log = ModRequire "../../utils/Log.lua"
 
 ---@class LootDeliveryCommon
 local LootDeliveryCommon = {}
@@ -20,10 +20,14 @@ local LootDeliveryCommon = {}
 ---@param ownerIndex number
 ---@param preSnapshot table<number, boolean>
 local function RegisterNewLoots(ownerIndex, preSnapshot)
+    local hero = CoopPlayers.GetHero(ownerIndex)
     for lootId, lootData in pairs(LootObjects) do
         if not preSnapshot[lootId] and not LootRegistry.Get(lootId) then
             if lootData and lootData.ObjectId and lootData.OnUsedFunctionName == "UseLoot" then
-                LootRegistry.Register(lootData.ObjectId, ownerIndex, "room_reward", lootData.Name)
+                if hero then
+                    lootData.UsedByHero = hero
+                end
+                LootRegistry.Register(lootData.ObjectId, ownerIndex, "room_reward", lootData.Name, lootData.CoopClickedByPlayer)
                 Log.Write(string.format(
                     "TN_Coop:SpawnRoomReward registered bonus loot objectId=%s name=%s player=%s",
                     tostring(lootData.ObjectId),
@@ -75,10 +79,34 @@ function LootDeliveryCommon.SpawnRewardForHero(baseFun, eventSource, args, hero,
         preSnapshot[id] = true
     end
 
-    local result = HeroContext.RunWithHeroContextAwait(hero, baseFun, eventSource, args)
+    local room = CurrentRun and CurrentRun.CurrentRoom
+    local previousOwner = room and room.CoopPendingRewardOwner
+    if room then
+        room.CoopPendingRewardOwner = ownerIndex
+        room.CoopPendingRewardClickedBy = nil
+    end
 
-    if result and result.ObjectId then
-        LootRegistry.Register(result.ObjectId, ownerIndex, "room_reward", result.Name)
+    local ok, result = pcall(HeroContext.RunWithHeroContextAwait, hero, baseFun, eventSource, args)
+
+    if room then
+        room.CoopPendingRewardOwner = previousOwner
+    end
+
+    if ok and result and result.ObjectId then
+        local clickedByPlayer = room and room.CoopPendingRewardClickedBy or result.CoopClickedByPlayer
+        Log.Write(string.format(
+            "TN_Coop:SpawnRoomReward objectId=%s owner=%s hero=%s user=%s",
+            tostring(result.ObjectId),
+            tostring(ownerIndex),
+            tostring(hero and hero.ObjectId),
+            tostring(clickedByPlayer)
+        ))
+        result.UsedByHero = hero
+        LootRegistry.Register(result.ObjectId, ownerIndex, "room_reward", result.Name, clickedByPlayer)
+    end
+
+    if not ok then
+        error(result, 0)
     end
 
     RegisterNewLoots(ownerIndex, preSnapshot)

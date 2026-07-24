@@ -35,8 +35,9 @@ function LootHooks.wrap.UnwrapRandomLoot(baseFun, ...)
     for lootId, lootData in pairs(LootObjects) do
         if not lootData.Cost then
             if playerId then
-                LootRegistry.Register(lootId, playerId, "store", lootData.Name)
+                LootRegistry.Register(lootId, playerId, "store", lootData.Name, lootData.CoopClickedByPlayer)
             end
+            lootData.UsedByHero = hero
             CoopUseItem(hero.ObjectId, lootId)
             break
         end
@@ -100,6 +101,10 @@ function LootHooks.InitGameHooks()
         local ok, result = pcall(baseFun, screen, button, args)
         if ok then
             if source and source.ObjectId then
+                local entry = LootRegistry.Get(source.ObjectId)
+                if entry and entry.clickedByPlayer == nil and screen and screen.User then
+                    LootRegistry.SetClickedBy(source.ObjectId, CoopPlayers.GetPlayerByHero(screen.User) or entry.clickedByPlayer)
+                end
                 LootRegistry.Consume(source.ObjectId)
             end
         else

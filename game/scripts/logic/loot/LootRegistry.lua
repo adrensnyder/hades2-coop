@@ -8,13 +8,14 @@ local CoopPlayers = ModRequire "../CoopPlayers.lua"
 ---@type LootQuery
 local LootQuery = ModRequire "LootQuery.lua"
 ---@type Log
-local Log = ModRequire "../utils/Log.lua"
+local Log = ModRequire "../../utils/Log.lua"
 
 ---@alias LootRegistryState "pending" | "active" | "consumed" | "cancelled"
 ---@alias LootRegistrySource "room_reward" | "store" | "hermes_followup" | "bonus"
 
 ---@class LootRegistryEntry
 ---@field playerId number
+---@field clickedByPlayer number|nil
 ---@field state LootRegistryState
 ---@field source LootRegistrySource
 ---@field rewardType string|nil
@@ -50,10 +51,12 @@ end
 ---@param playerId number
 ---@param source LootRegistrySource
 ---@param rewardType string|nil
-function LootRegistry.Register(objectId, playerId, source, rewardType)
+---@param clickedByPlayer number|nil
+function LootRegistry.Register(objectId, playerId, source, rewardType, clickedByPlayer)
     local registry = getRegistry()
     registry[objectId] = {
         playerId = playerId,
+        clickedByPlayer = clickedByPlayer,
         state = "pending",
         source = source,
         rewardType = rewardType,
@@ -82,9 +85,10 @@ function LootRegistry.Consume(objectId)
         if entry.source == "room_reward" then
             getRoomClaims()[entry.playerId] = true
             Log.Write(string.format(
-                "TN_Coop:Registry CONSUME objectId=%s player=%s source=%s roomClaimSet=true counter=%s",
+                "TN_Coop:Registry CONSUME objectId=%s Assigned=%s ClickedBy=%s source=%s roomClaimSet=true counter=%s",
                 tostring(objectId),
                 tostring(entry.playerId),
+                tostring(entry.clickedByPlayer),
                 tostring(entry.source),
                 tostring(CurrentRun and CurrentRun.CoopLootCounter)
             ))
@@ -168,6 +172,13 @@ function LootRegistry.HasRoomRewardClaim(playerId)
     end
 
     return false
+end
+
+function LootRegistry.SetClickedBy(objectId, clickedByPlayer)
+    local entry = getRegistry()[objectId]
+    if entry then
+        entry.clickedByPlayer = clickedByPlayer
+    end
 end
 
 function LootRegistry.CancelAllPending()
