@@ -60,6 +60,12 @@ function RunHooks.wrap.SetupHeroObject(SetupHeroObjectFun, ...)
 end
 
 function RunHooks.wrap.StartRoom(StartRoomFun, run, currentRoom)
+    DebugPrint { Text = string.format(
+        "TN_Coop:Run StartRoom room=%s set=%s",
+        tostring(currentRoom and (currentRoom.GenusName or currentRoom.Name)),
+        tostring(currentRoom and currentRoom.RoomSetName)
+    ) }
+
     -- Fixes mouse disappearing after level transiction
     CoopControl.ResetAllPlayers("Current")
 
@@ -219,6 +225,11 @@ function RunHooks.wrap.StartEncounterEffects(baseFun, run)
 end
 
 function RunHooks.post.StartRoomPresentation(run, room)
+    DebugPrint { Text = string.format(
+        "TN_Coop:Run StartRoomPresentation finished room=%s set=%s",
+        tostring(room and (room.GenusName or room.Name)),
+        tostring(room and room.RoomSetName)
+    ) }
     Events.run:trigger("roomPresentationFinished", run, room)
 end
 
@@ -227,6 +238,10 @@ function RunHooks.pre.OnAllEnemiesDead()
 end
 
 function RunHooks.pre.StartRoom()
+    DebugPrint { Text = string.format(
+        "TN_Coop:Run pre StartRoom room=%s",
+        tostring(CurrentRun and CurrentRun.CurrentRoom and (CurrentRun.CurrentRoom.GenusName or CurrentRun.CurrentRoom.Name))
+    ) }
     RoomExitSelection.Reset()
     Events.run:trigger("roomPreStart")
 end

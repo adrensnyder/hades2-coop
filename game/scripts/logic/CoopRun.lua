@@ -93,6 +93,12 @@ end
 
 ---@private
 function CoopRun.OnRoomPresentationFinished(run, currentRoom)
+    DebugPrint { Text = string.format(
+        "TN_Coop:Run roomPresentationFinished room=%s set=%s",
+        tostring(currentRoom and (currentRoom.GenusName or currentRoom.Name)),
+        tostring(currentRoom and currentRoom.RoomSetName)
+    ) }
+
     for playerId = 2, CoopPlayers.GetPlayersCount() do
         local hero = CoopPlayers.GetHero(playerId)
         if not hero or (hero and not hero.IsDead) then
@@ -116,6 +122,12 @@ function CoopRun.OnRoomPresentationFinished(run, currentRoom)
     for playerId = 2, CoopPlayers.GetPlayersCount() do
         local hero = CoopPlayers.GetHero(playerId)
         if not hero.IsDead then
+            DebugPrint { Text = string.format(
+                "TN_Coop:Run roomPresentation teleport player=%s hero=%s target=%s",
+                tostring(playerId),
+                tostring(hero.ObjectId),
+                tostring(teleportPoint)
+            ) }
             Teleport({ Id = hero.ObjectId, DestinationId = teleportPoint })
             --CoopControl.Reset(playerId)
             if isMainPlayerDead then

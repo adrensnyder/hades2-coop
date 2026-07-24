@@ -21,6 +21,86 @@ local Config = ModRequire "../../config.lua"
 ---@class LootShared : ILootDelivery
 local LootShared = {}
 
+local function copyTable(source)
+    local result = {}
+    if source then
+        for key, value in pairs(source) do
+            result[key] = value
+        end
+    end
+    return result
+end
+
+---@param baseFun fun(eventSource: table, args: table)
+---@param eventSource table
+---@param hero table
+---@param ownerIndex number|nil
+---@param spawnArgs table
+---@param rewardDescriptor table|nil
+---@param anchorObjectId number|nil
+---@return table|nil
+local function spawnRewardForHero(baseFun, eventSource, hero, ownerIndex, spawnArgs, rewardDescriptor, anchorObjectId)
+    local resolvedOwnerIndex = ownerIndex or CoopPlayers.GetPlayerByHero(hero) or 1
+    local heroArgs = copyTable(spawnArgs)
+    if anchorObjectId then
+        heroArgs.SpawnRewardOnId = anchorObjectId
+    end
+    if rewardDescriptor and rewardDescriptor.ChosenRewardType then
+        heroArgs.RewardOverride = rewardDescriptor.ChosenRewardType
+        heroArgs.LootName = rewardDescriptor.ForceLootName
+    end
+
+    local result = HeroContext.RunWithHeroContextAwait(hero, baseFun, eventSource, heroArgs)
+    if result and result.ObjectId then
+        LootRegistry.Register(result.ObjectId, resolvedOwnerIndex, "room_reward", result.Name)
+    end
+    return result
+end
+
+---@param baseFun fun(eventSource: table, args: table)
+---@param eventSource table
+---@param hero table
+---@param ownerIndex number|nil
+---@param templateArgs table
+---@param rewardDescriptor table|nil
+---@param templateResult table|nil
+---@return table|nil
+local function duplicateRewardForHero(baseFun, eventSource, hero, ownerIndex, templateArgs, rewardDescriptor, templateResult)
+    if not hero then
+        return nil
+    end
+
+    local resolvedOwnerIndex = ownerIndex or CoopPlayers.GetPlayerByHero(hero) or 1
+    local duplicateArgs = copyTable(templateArgs)
+    if templateResult and templateResult.ObjectId and hero.ObjectId then
+        local angle = GetAngleBetween({
+            Id = templateResult.ObjectId,
+            DestinationId = hero.ObjectId,
+        })
+        local offset = CalcOffset(math.rad(angle + 180), 110)
+        duplicateArgs.SpawnRewardOnId = templateResult.ObjectId
+        duplicateArgs.OffsetX = offset.X
+        duplicateArgs.OffsetY = offset.Y
+    end
+
+    local result = spawnRewardForHero(
+        baseFun,
+        eventSource,
+        hero,
+        resolvedOwnerIndex,
+        duplicateArgs,
+        rewardDescriptor,
+        duplicateArgs.SpawnRewardOnId
+    )
+    if result and result.ObjectId then
+        DebugPrint { Text = string.format(
+            "LootDelivery: duplicated fallback reward for player=%s object=%s",
+            tostring(resolvedOwnerIndex), tostring(result.ObjectId)
+        ) }
+    end
+    return result
+end
+
 function LootShared.InitHooks()
     Events.run:on("newRunStarted", LootShared.Reset)
     Events.run:on("roomPreLeave", LootShared.OnRoomPreLeave)
@@ -31,6 +111,10 @@ end
 ---@param run table
 ---@param room table
 function LootShared.OnUnlockedRewardedRoom(baseFun, run, room)
+    DebugPrint { Text = string.format(
+        "TN_Coop:Loot OnUnlockedRewardedRoom room=%s",
+        tostring(room and (room.GenusName or room.Name))
+    ) }
     baseFun(run, room)
 end
 
@@ -38,12 +122,12 @@ end
 ---@param eventSource table
 ---@param args table
 function LootShared.SpawnRoomReward(baseFun, eventSource, args)
-    local room = CurrentRun.CurrentRoom
-
     local pendingRewards = CurrentRun.CoopPendingRoomRewards
+    local pendingCount = 0
     local pendingOwner
     if pendingRewards then
         for playerId in pairs(pendingRewards) do
+            pendingCount = pendingCount + 1
             if not pendingOwner then
                 pendingOwner = playerId
             end
@@ -57,6 +141,14 @@ function LootShared.SpawnRoomReward(baseFun, eventSource, args)
     else
         hero = CoopPlayers.GetAliveHeroes()[1] or CurrentRun.Hero
     end
+
+    DebugPrint { Text = string.format(
+        "LootDelivery: spawn start mode=%s player=%s pending=%s players=%s",
+        tostring(Config.RewardMode),
+        tostring(playerIndex),
+        tostring(pendingCount),
+        tostring(CoopPlayers.GetPlayersCount())
+    ) }
 
     if hero.IsDead then
         local altIndex = LootQuery.PeekNextHeroForLoot()
@@ -72,14 +164,16 @@ function LootShared.SpawnRoomReward(baseFun, eventSource, args)
     end
 
     local rewardDescriptor = pendingRewards and pendingRewards[playerIndex]
-    local spawnArgs = args or {}
-    if rewardDescriptor and rewardDescriptor.ChosenRewardType then
-        spawnArgs = MergeTables(spawnArgs, {
-            RewardOverride = rewardDescriptor.ChosenRewardType,
-            LootName = rewardDescriptor.ForceLootName,
-        })
-    end
-    local result = HeroContext.RunWithHeroContextAwait(hero, baseFun, eventSource, spawnArgs)
+    local primarySpawnArgs = args or {}
+    local result = spawnRewardForHero(
+        baseFun,
+        eventSource,
+        hero,
+        playerIndex,
+        primarySpawnArgs,
+        rewardDescriptor,
+        nil
+    )
     if rewardDescriptor then
         DebugPrint { Text = string.format(
             "LootDelivery: player=%s reward=%s object=%s",
@@ -88,11 +182,7 @@ function LootShared.SpawnRoomReward(baseFun, eventSource, args)
         ) }
     end
 
-    if result and result.ObjectId then
-        local ownerIndex = playerIndex or CoopPlayers.GetPlayerByHero(hero) or 1
-        LootRegistry.Register(result.ObjectId, ownerIndex, "room_reward", result.Name)
-    end
-
+    local finalResult = result
     if Config.RewardMode == "Independent" then
         local firstOwnerIndex = playerIndex or CoopPlayers.GetPlayerByHero(hero) or 1
         local otherIndex = LootQuery.GetOtherPlayerIndex(firstOwnerIndex)
@@ -108,37 +198,81 @@ function LootShared.SpawnRoomReward(baseFun, eventSource, args)
         if otherIndex and CoopPlayers.GetPlayersCount() >= 2 then
             local otherHero = CoopPlayers.GetHero(otherIndex)
             if otherHero and not otherHero.IsDead then
-                local offset = { X = 100, Y = 0 }
+                local otherDescriptor = pendingRewards and pendingRewards[otherIndex]
+                DebugPrint { Text = string.format(
+                    "LootDelivery: spawn second candidate player=%s hero=%s descriptor=%s",
+                    tostring(otherIndex),
+                    tostring(otherHero.ObjectId),
+                    tostring(otherDescriptor and otherDescriptor.ChosenRewardType)
+                ) }
+                local otherSpawnArgs = copyTable(primarySpawnArgs)
                 if result and result.ObjectId and otherHero.ObjectId then
                     local angle = GetAngleBetween({
                         Id = result.ObjectId,
                         DestinationId = otherHero.ObjectId,
                     })
-                    offset = CalcOffset(math.rad(angle + 180), 110)
+                    local offset = CalcOffset(math.rad(angle + 180), 110)
+                    otherSpawnArgs.SpawnRewardOnId = result.ObjectId
+                    otherSpawnArgs.OffsetX = offset.X
+                    otherSpawnArgs.OffsetY = offset.Y
                 end
-
-                local offsetArgs = MergeTables(spawnArgs, {
-                    SpawnRewardOnId = result and result.ObjectId,
-                    OffsetX = offset.X,
-                    OffsetY = offset.Y,
-                })
-                local otherDescriptor = pendingRewards and pendingRewards[otherIndex]
-                if otherDescriptor and otherDescriptor.ChosenRewardType then
-                    offsetArgs = MergeTables(offsetArgs, {
-                        RewardOverride = otherDescriptor.ChosenRewardType,
-                        LootName = otherDescriptor.ForceLootName,
-                    })
-                end
-                local result2 = HeroContext.RunWithHeroContextAwait(otherHero, baseFun, eventSource, offsetArgs)
+                local otherResult = spawnRewardForHero(
+                    baseFun,
+                    eventSource,
+                    otherHero,
+                    otherIndex,
+                    otherSpawnArgs,
+                    otherDescriptor,
+                    otherSpawnArgs.SpawnRewardOnId
+                )
                 if otherDescriptor then
                     DebugPrint { Text = string.format(
                         "LootDelivery: player=%s reward=%s object=%s",
                         tostring(otherIndex), tostring(otherDescriptor.ChosenRewardType),
-                        tostring(result2 and result2.ObjectId)
+                        tostring(otherResult and otherResult.ObjectId)
                     ) }
                 end
-                if result2 and result2.ObjectId then
-                    LootRegistry.Register(result2.ObjectId, otherIndex, "room_reward", result2.Name)
+                if result and result.ObjectId and (not otherResult or not otherResult.ObjectId) then
+                    DebugPrint { Text = string.format(
+                        "LootDelivery: second reward missing, duplicating primary for player=%s",
+                        tostring(otherIndex)
+                    ) }
+                    local duplicateResult = duplicateRewardForHero(
+                        baseFun,
+                        eventSource,
+                        otherHero,
+                        otherIndex,
+                        primarySpawnArgs,
+                        rewardDescriptor,
+                        result
+                    )
+                    if not duplicateResult or not duplicateResult.ObjectId then
+                        DebugPrint { Text = string.format(
+                            "LootDelivery: fallback duplication failed for player=%s",
+                            tostring(otherIndex)
+                        ) }
+                    end
+                elseif (not result or not result.ObjectId) and otherResult and otherResult.ObjectId then
+                    finalResult = otherResult
+                    DebugPrint { Text = string.format(
+                        "LootDelivery: first reward missing, duplicating secondary for player=%s",
+                        tostring(playerIndex or firstOwnerIndex)
+                    ) }
+                    local duplicateResult = duplicateRewardForHero(
+                        baseFun,
+                        eventSource,
+                        hero,
+                        playerIndex or firstOwnerIndex,
+                        otherSpawnArgs,
+                        otherDescriptor,
+                        otherResult
+                    )
+                    if not duplicateResult or not duplicateResult.ObjectId then
+                        DebugPrint { Text = string.format(
+                            "LootDelivery: fallback duplication failed for player=%s",
+                            tostring(playerIndex or firstOwnerIndex)
+                        ) }
+                    end
                 end
             end
         end
@@ -148,7 +282,7 @@ function LootShared.SpawnRoomReward(baseFun, eventSource, args)
         CurrentRun.CoopPendingRoomRewards = nil
     end
 
-    return result
+    return finalResult
 end
 
 function LootShared.Reset()
@@ -185,7 +319,19 @@ end
 ---@param loot table
 ---@param hero table
 function LootShared.CanUseHeroLoot(loot, hero)
-    return true
+    if not loot or not loot.ObjectId then
+        return true
+    end
+    if not hero then
+        return false
+    end
+
+    local ownerPlayerId = LootRegistry.GetPlayerId(loot.ObjectId)
+    if not ownerPlayerId then
+        return true
+    end
+
+    return CoopPlayers.GetPlayerByHero(hero) == ownerPlayerId
 end
 
 return LootShared

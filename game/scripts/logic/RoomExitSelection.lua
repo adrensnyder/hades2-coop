@@ -34,6 +34,33 @@ local function getState()
     return room.CoopRoomExitSelection
 end
 
+local function describeSelection(selection)
+    if not selection then
+        return "nil"
+    end
+
+    return string.format(
+        "{DoorId=%s Reward=%s Confirmed=%s PresentationComplete=%s}",
+        tostring(selection.DoorId),
+        tostring(selection.RewardDescriptor and selection.RewardDescriptor.ChosenRewardType),
+        tostring(selection.Confirmed),
+        tostring(selection.PresentationComplete)
+    )
+end
+
+local function describeReadyState(state)
+    if not state then
+        return "state=nil"
+    end
+
+    local parts = {}
+    for _, playerId in ipairs(state.EligiblePlayerIds or {}) do
+        local selection = state.PlayerSelections and state.PlayerSelections[playerId]
+        table.insert(parts, string.format("P%s=%s", tostring(playerId), describeSelection(selection)))
+    end
+    return table.concat(parts, " | ")
+end
+
 ---@return table
 function RoomExitSelection.Begin()
     local room = getRoom()
@@ -118,6 +145,7 @@ function RoomExitSelection.RecordSelection(playerId, doorId, rewardDescriptor, n
         "RoomExitSelection: player=%s door=%s room=%s confirmed=true",
         tostring(playerId), tostring(doorId), tostring(state.AuthoritativeNextRoom)
     ) }
+    DebugPrint { Text = "RoomExitSelection: selections " .. describeReadyState(state) }
     return true
 end
 
@@ -144,6 +172,7 @@ function RoomExitSelection.BeginTransition()
     state.Phase = "Transitioning"
     state.LeaveRoomCalled = true
     DebugPrint { Text = "RoomExitSelection: all eligible players confirmed; committing one transition" }
+    DebugPrint { Text = "RoomExitSelection: transition snapshot " .. describeReadyState(state) }
     return true
 end
 
@@ -199,14 +228,19 @@ function RoomExitSelection.PrepareRewardDelivery()
     end
 
     local pending = {}
+    local pendingCount = 0
     for _, playerId in ipairs(state.EligiblePlayerIds) do
         local selection = state.PlayerSelections[playerId]
         if selection and selection.RewardDescriptor then
             pending[playerId] = selection.RewardDescriptor
+            pendingCount = pendingCount + 1
         end
     end
     CurrentRun.CoopPendingRoomRewards = pending
-    DebugPrint { Text = "RoomExitSelection: prepared destination reward descriptors" }
+    DebugPrint { Text = string.format(
+        "TN_Coop:RoomExitSelection prepared reward descriptors count=%s",
+        tostring(pendingCount)
+    ) }
 end
 
 local function isSupportedDoor(door)
@@ -240,8 +274,19 @@ function RoomExitSelection.HandleAttemptUseDoor(baseFun, door, args)
         return false
     end
 
+    DebugPrint { Text = string.format(
+        "RoomExitSelection: attempt player=%s ready=%s selections=%s",
+        tostring(playerId),
+        tostring(RoomExitSelection.IsReady()),
+        describeReadyState(state)
+    ) }
+
     local selection = state.PlayerSelections[playerId]
     if selection.Confirmed then
+        DebugPrint { Text = string.format(
+            "RoomExitSelection: player=%s already confirmed",
+            tostring(playerId)
+        ) }
         return true
     end
 
@@ -261,6 +306,11 @@ function RoomExitSelection.HandleAttemptUseDoor(baseFun, door, args)
     DebugPrint { Text = string.format(
         "RoomExitSelection: player=%s presentation complete",
         tostring(playerId)
+    ) }
+    DebugPrint { Text = string.format(
+        "RoomExitSelection: post-presentation ready=%s selections=%s",
+        tostring(RoomExitSelection.IsReady()),
+        describeReadyState(state)
     ) }
 
     if not RoomExitSelection.IsReady() then

@@ -53,8 +53,36 @@ function RunEx.IsDefaultDoorsLeadToRunProgress()
 end
 
 function RunEx.RemoveDoorReward(door)
-    error("Not implementated")
-    return false
+    if not door then
+        return false
+    end
+
+    local room = door.Room
+    DebugPrint { Text = string.format(
+        "TN_Coop:RunEx RemoveDoorReward door=%s room=%s",
+        tostring(door.ObjectId),
+        tostring(room and (room.GenusName or room.Name))
+    ) }
+
+    door.NoReward = true
+    door.RewardStoreName = nil
+    door.ChosenRewardType = nil
+    door.ForceLootName = nil
+    door.RewardOverrides = nil
+    door.RewardName = nil
+    door.RewardId = nil
+
+    if room then
+        room.NoReward = true
+        room.RewardStoreName = nil
+        room.ChosenRewardType = nil
+        room.ForceLootName = nil
+        room.RewardOverrides = nil
+        room.RewardName = nil
+        room.RewardId = nil
+    end
+
+    return true
 end
 
 function RunEx.IsHubRoom(name)

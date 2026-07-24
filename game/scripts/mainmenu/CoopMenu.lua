@@ -83,9 +83,8 @@ local START_BUTTON_MESSAGES = {
 }
 
 local function GetRelativeScreenPath()
-    local modPath = GetCurrentModPath()
     local scriptDir = GetScriptDir()
-    return scriptDir:sub(#modPath + 2) .. "ControllerSelectionMenuScreen.sjson"
+    return scriptDir:sub(#("Content/Mods/")) .. "/ControllerSelectionMenuScreen.sjson"
 end
 
 local function DescribeControl(playerId)
