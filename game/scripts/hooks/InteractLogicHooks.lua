@@ -29,6 +29,20 @@ local function resolveHero(item, fallbackHero)
     return fallbackHero
 end
 
+function InteractLogicHooks.wrap.UseLoot(baseFun, usee, args, user)
+    if usee and usee.ObjectId then
+        local entry = LootRegistry.Get(usee.ObjectId)
+        if entry and entry.source == "room_reward" then
+            local playerId = CoopPlayers.GetPlayerByHero(user)
+            if playerId and LootRegistry.HasRoomRewardClaim(playerId) then
+                return false
+            end
+        end
+    end
+
+    return baseFun(usee, args, user)
+end
+
 function InteractLogicHooks.wrap.OnUsed(_OnUsed, args)
     if type(args[1]) == "function" then
         _OnUsed { function(triggerArgs)
@@ -38,7 +52,6 @@ function InteractLogicHooks.wrap.OnUsed(_OnUsed, args)
             end
 
             local interactingHero = CoopPlayers.GetHeroByUnit(triggerArgs.UserId)
-
             if item.UsedByHero and item.UsedByHero ~= interactingHero then
                 return
             end

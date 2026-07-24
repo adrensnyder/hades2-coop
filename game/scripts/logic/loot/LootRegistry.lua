@@ -32,6 +32,18 @@ local function getRegistry()
     return room.CoopLootRegistry
 end
 
+---@return table<number, boolean>
+local function getRoomClaims()
+    local room = CurrentRun and CurrentRun.CurrentRoom
+    if not room then
+        return {}
+    end
+    if room.CoopLootClaims == nil then
+        room.CoopLootClaims = {}
+    end
+    return room.CoopLootClaims
+end
+
 ---@param objectId number
 ---@param playerId number
 ---@param source LootRegistrySource
@@ -65,6 +77,9 @@ function LootRegistry.Consume(objectId)
     local entry = getRegistry()[objectId]
     if entry and (entry.state == "pending" or entry.state == "active") then
         entry.state = "consumed"
+        if entry.source == "room_reward" then
+            getRoomClaims()[entry.playerId] = true
+        end
         LootQuery.CommitCounter(entry.playerId)
     end
 end
@@ -113,6 +128,24 @@ function LootRegistry.PendingCount()
     return count
 end
 
+---@param playerId number
+---@return boolean
+function LootRegistry.HasRoomRewardClaim(playerId)
+    -- Treat an active room reward as locked so the same player cannot re-enter
+    -- the pickup flow before resolving or cancelling the open menu.
+    if getRoomClaims()[playerId] == true then
+        return true
+    end
+
+    for _, entry in pairs(getRegistry()) do
+        if entry.playerId == playerId and entry.source == "room_reward" and entry.state == "active" then
+            return true
+        end
+    end
+
+    return false
+end
+
 function LootRegistry.CancelAllPending()
     for _, entry in pairs(getRegistry()) do
         if entry.state == "pending" or entry.state == "active" then
@@ -133,6 +166,7 @@ function LootRegistry.RemoveAll()
     local room = CurrentRun and CurrentRun.CurrentRoom
     if room then
         room.CoopLootRegistry = {}
+        room.CoopLootClaims = {}
     end
 end
 
