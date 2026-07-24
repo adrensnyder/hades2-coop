@@ -17,6 +17,8 @@ local CoopControl = ModRequire "../logic/CoopControl.lua"
 local GameStateEx = ModRequire "../logic/GameStateEx.lua"
 ---@type LootRegistry
 local LootRegistry = ModRequire "../logic/loot/LootRegistry.lua"
+---@type Log
+local Log = ModRequire "../utils/Log.lua"
 
 ---@class MenuHooks : SimpleHook
 local MenuHooks = SimpleHook.New()
@@ -65,9 +67,18 @@ function MenuHooks.HookUiControl(funName)
                 local entry = LootRegistry.Get(source.ObjectId)
                 if entry then
                     playerId = entry.playerId
+                    Log.Write(string.format(
+                        "TN_Coop:Menu OpenUpgradeChoiceMenu owner=%s objectId=%s",
+                        tostring(playerId),
+                        tostring(source.ObjectId)
+                    ))
                     LootRegistry.Activate(source.ObjectId)
                     local capturedObjectId = source.ObjectId
                     HookUtils.onPreFunctionOnce("UnfreezePlayerUnit", function()
+                        Log.Write(string.format(
+                            "TN_Coop:Menu OpenUpgradeChoiceMenu cleanup objectId=%s",
+                            tostring(capturedObjectId)
+                        ))
                         local e = LootRegistry.Get(capturedObjectId)
                         if e and e.state == "active" then
                             LootRegistry.Cancel(capturedObjectId)
@@ -77,9 +88,19 @@ function MenuHooks.HookUiControl(funName)
             end
         end
 
+        Log.Write(string.format(
+            "TN_Coop:Menu hook=%s player=%s",
+            tostring(funName),
+            tostring(playerId)
+        ))
         CoopControl.SwitchControlForMenu(playerId)
 
         HookUtils.onPreFunctionOnce("UnfreezePlayerUnit", function()
+            Log.Write(string.format(
+                "TN_Coop:Menu cleanup hook=%s player=%s",
+                tostring(funName),
+                tostring(playerId)
+            ))
             CoopControl.ExitMenuControl()
         end)
 
@@ -143,7 +164,7 @@ function MenuHooks.wrap.DisplayTextLine(baseFun, screen, source, line, parentLin
 end
 
 function MenuHooks.pre.OnScreenOpened(screen)
-    DebugPrint { Text = "OnScreenOpened:  " .. tostring(screen.Name) }
+    Log.Write("OnScreenOpened: " .. tostring(screen.Name))
 end
 
 return MenuHooks

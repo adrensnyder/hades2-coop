@@ -3,8 +3,12 @@
 -- Licensed under the MIT license. See LICENSE file in the project root for details.
 --
 
+print("TN_Coop:Menu module load")
+
 ---@type PlayerDeviceData[]
 local SelectedGuiControl = {}
+---@type Log
+local Log = ModRequire "../utils/Log.lua"
 
 ---@return PlayerDeviceData
 local function GetCurrentControl()
@@ -79,12 +83,20 @@ local START_BUTTON_MESSAGES = {
 }
 
 local function GetRelativeScreenPath()
-    local modPath = GetCurrentModPath()
     local scriptDir = GetScriptDir()
-    return scriptDir:sub(#modPath + 2) .. "ControllerSelectionMenuScreen.sjson"
+    return scriptDir:sub(#("Content/Mods/")) .. "/ControllerSelectionMenuScreen.sjson"
+end
+
+local function DescribeControl(playerId)
+    local control = SelectedGuiControl[playerId]
+    if not control then
+        return "nil"
+    end
+    return string.format("{Device=%s, ControllerId=%s}", tostring(control.Device), tostring(control.ControllerId))
 end
 
 MainMenuAPIAddGamemode("Coop", function(name)
+    Log.Write("TN_Coop:Menu open gamemode=" .. tostring(name))
     SelectedGuiControl = {}
 
     local menu = CreateMenuScreen()
@@ -106,6 +118,7 @@ MainMenuAPIAddGamemode("Coop", function(name)
 
     local function SetStage(state)
         CURRENT_MENU_STATE = state
+        Log.Write("TN_Coop:Menu stage=" .. tostring(state))
 
         if state == MENU_STATE.START then
             message:SetTextLocalizationKey("CoopMenu_StartMessage")
@@ -137,25 +150,35 @@ MainMenuAPIAddGamemode("Coop", function(name)
     SetStage(MENU_STATE.START)
 
     btn:AddActivationHandler(function()
+        Log.Write("TN_Coop:Menu activation state=" .. tostring(CURRENT_MENU_STATE))
         if CURRENT_MENU_STATE == MENU_STATE.START then
             SelectedGuiControl[1] = GetCurrentControl()
+            Log.Write("TN_Coop:Menu captured P1 control=" .. DescribeControl(1))
             SetStage(MENU_STATE.PLAYER_ONE_SELECTED)
         elseif CURRENT_MENU_STATE == MENU_STATE.PLAYER_ONE_SELECTED then
             SelectedGuiControl[2] = GetCurrentControl()
+            Log.Write("TN_Coop:Menu captured P2 control=" .. DescribeControl(2))
 
             if SelectedGuiControl[2].Device == "Keyboard" then
+                Log.Write("TN_Coop:Menu invalid selection second keyboard")
                 SetStage(MENU_STATE.INVALID_STATE_SECOND_KEYBOARD)
             elseif SelectedGuiControl[1].Device == "Gamepad" and SelectedGuiControl[1].ControllerId == SelectedGuiControl[2].ControllerId then
+                Log.Write("TN_Coop:Menu invalid selection same device")
                 SetStage(MENU_STATE.INVALID_STATE_SAME_DEVICE)
             else
                 SetStage(MENU_STATE.PLAYER_TWO_SELECTED)
             end
         elseif CURRENT_MENU_STATE == MENU_STATE.PLAYER_TWO_SELECTED then
+            Log.Write("TN_Coop:Menu before SetTempRuntimeData Gamemode=" .. tostring(name))
             SetTempRuntimeData("Gamemode", name)
             AssingKeyboardPlayerFreeControllerId()
+            Log.Write("TN_Coop:Menu before control temp data P1=" .. DescribeControl(1) .. " P2=" .. DescribeControl(2))
             SetTempRuntimeData("TN_Coop:control", SelectedGuiControl)
+            Log.Write("TN_Coop:Menu after control temp data")
+            Log.Write("TN_Coop:Menu before MainMenuOpenProfiles")
             MainMenuOpenProfiles()
         else
+            Log.Write("TN_Coop:Menu fallback reset stage")
             SetStage(MENU_STATE.START)
         end
     end)

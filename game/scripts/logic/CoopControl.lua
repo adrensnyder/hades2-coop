@@ -5,6 +5,8 @@
 
 ---@class CoopControl
 local CoopControl = {}
+---@type Log
+local Log = ModRequire "../utils/Log.lua"
 
 ---@class PlayerDeviceData
 ---@field Device "Keyboard" | "Gamepad"
@@ -60,16 +62,24 @@ end
 function CoopControl.SwitchControlForMenu(playerId)
     local controllerId = CoopControl.Schemas.Current[playerId].ControllerId
 
+    Log.Write(string.format(
+        "TN_Coop:Control SwitchControlForMenu player=%s controller=%s",
+        tostring(playerId),
+        tostring(controllerId)
+    ))
     SetConfigOption { Name = "AllowControlHotSwap", Value = true }
     CoopSetPlayerGamepad(1, controllerId)
     for playerId = 2, #CoopControl.Schemas.Current do
         CoopSetPlayerGamepad(playerId, UNUSED_GAMEPAD_INDEX)
     end
+    Log.Write("TN_Coop:Control SwitchControlForMenu done")
 end
 
 function CoopControl.ExitMenuControl()
+    Log.Write("TN_Coop:Control ExitMenuControl")
     SetConfigOption { Name = "AllowControlHotSwap", Value = false }
     CoopControl.ResetAllPlayers()
+    Log.Write("TN_Coop:Control ExitMenuControl done")
 end
 
 ---@param schema ControlSchema?
